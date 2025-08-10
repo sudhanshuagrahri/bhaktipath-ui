@@ -27,10 +27,22 @@ import com.krishna.ram_krishna.repository.ProgramRegistrationRepository;
 import com.krishna.ram_krishna.repository.ProgramRepository;
 import com.krishna.ram_krishna.repository.ArchanaBookingRepository;
 import com.krishna.ram_krishna.repository.UserRepository;
+import com.krishna.ram_krishna.repository.PledgeRepository;
+import com.krishna.ram_krishna.repository.PrayerRepository;
+import com.krishna.ram_krishna.model.Pledge;
+import com.krishna.ram_krishna.model.Prayer;
+import com.krishna.ram_krishna.dto.PledgeSubmissionRequest;
+import com.krishna.ram_krishna.dto.PrayerSubmissionRequest;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.transaction.annotation.Transactional;
+
+import com.krishna.ram_krishna.security.JwtUtil;
+import com.krishna.ram_krishna.dto.LoginJwtResponse;
+import org.springframework.beans.factory.annotation.Autowired;
+
+
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -54,34 +66,64 @@ public class KrishnaController {
     private final QuizRepository quizRepository;
     private final QuizAttemptRepository quizAttemptRepository;
 
+    private final PledgeRepository pledgeRepository;
+    private final PrayerRepository prayerRepository;
+
+    @Autowired
+    private JwtUtil jwtUtil;
+    // Submit Pledge API
+    @PostMapping("/pledge/submit")
+    public ResponseEntity<String> submitPledge(@RequestBody PledgeSubmissionRequest request) {
+        if (request.getUniqueId() == null || request.getUniqueId().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Login required to join Pledge");
+        }
+        Pledge pledge = new Pledge();
+        pledge.setUniqueId(request.getUniqueId());
+        pledge.setSacredCommitment(request.getSacredCommitment());
+        pledge.setPersonalCommitment(request.getPersonalCommitment());
+        pledgeRepository.save(pledge);
+        return ResponseEntity.ok("Pledge submitted successfully");
+    }
+
+    // Submit Prayer API
+    @PostMapping("/prayer/submit")
+    public ResponseEntity<String> submitPrayer(@RequestBody PrayerSubmissionRequest request) {
+        if (request.getUniqueId() == null || request.getUniqueId().trim().isEmpty()) {
+            return ResponseEntity.badRequest().body("Login required to join Prayer");
+        }
+        Prayer prayer = new Prayer();
+        prayer.setUniqueId(request.getUniqueId());
+        prayer.setPrayer(request.getPrayer());
+        prayerRepository.save(prayer);
+        return ResponseEntity.ok("Prayer submitted successfully");
+    }
+
     // Login API
     @PostMapping("/login")
-    public ResponseEntity<LoginResponse> login(@RequestBody LoginRequest request) {
+    public ResponseEntity<LoginJwtResponse> login(@RequestBody LoginRequest request) {
         Optional<User> existingUser = userRepository.findByMobileNumber(request.getMobileNumber());
-        
+        User user;
+        String message;
         if (existingUser.isPresent()) {
-            User user = existingUser.get();
-            return ResponseEntity.ok(new LoginResponse(
-                user.getUniqueId(), 
-                user.getName(), 
-                "Login successful", 
-                user.getRewards()
-            ));
+            user = existingUser.get();
+            message = "Login successful";
         } else {
             User newUser = new User();
             newUser.setMobileNumber(request.getMobileNumber());
             newUser.setName(request.getName());
             newUser.setUniqueId(UUID.randomUUID().toString());
             newUser.setRewards(BigDecimal.ZERO);
-            
-            User savedUser = userRepository.save(newUser);
-            return ResponseEntity.ok(new LoginResponse(
-                savedUser.getUniqueId(), 
-                savedUser.getName(), 
-                "Registration successful", 
-                savedUser.getRewards()
-            ));
+            user = userRepository.save(newUser);
+            message = "Registration successful";
         }
+        String token = jwtUtil.generateToken(user.getUniqueId());
+        return ResponseEntity.ok(new LoginJwtResponse(
+            user.getUniqueId(),
+            user.getName(),
+            message,
+            user.getRewards(),
+            token
+        ));
     }
 
     // Submit Service Booking
